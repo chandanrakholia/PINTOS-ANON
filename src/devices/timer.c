@@ -16,7 +16,9 @@
 #if TIMER_FREQ > 1000
 #error TIMER_FREQ <= 1000 recommended
 #endif
-
+/*my code begins*/
+struct list sleeping_threads;
+/*my code ends*/
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
@@ -35,6 +37,9 @@ static void real_time_delay (int64_t num, int32_t denom);
 void
 timer_init (void) 
 {
+  /*my code begins*/
+  list_init(&sleeping_threads);
+  /*my code ends*/
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -89,23 +94,26 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  // int64_t start = timer_ticks ();
+  int64_t start = timer_ticks ();
 
-  // ASSERT (intr_get_level () == INTR_ON);
+  ASSERT (intr_get_level () == INTR_ON);
   // while (timer_elapsed (start) < ticks) 
   //   thread_yield ();
   
   /*my code begins*/
-   if (ticks <= 0)
-     return;
-   ASSERT (intr_get_level () == INTR_ON);
 
-   // printf("debugging");
-   intr_disable ();
-   struct thread *cur = thread_current ();
-   cur->remaining_time_to_wake_up = ticks;
-   thread_block ();
-   intr_set_level (INTR_ON);
+   if(ticks>0){  //can't sleep for less than 0 ticks -don't fool me
+
+     enum intr_level old_level;
+     old_level=intr_disable();   //disable interrupts to prevent racing conditions
+     struct thread *cur=thread_current();
+     cur->sleepingtime= (ticks + timer_ticks());   //sleep for "ticks" ticks   
+     /*insert this thread in sleeping threads list and sort according to its sleeptime (using sleeptime_comparator)*/
+     list_insert_ordered (&sleeping_threads,&cur->elem,sleeptime_comparator,NULL);
+     thread_block();       //block this thread
+     intr_set_level(old_level);  //restore interrupt level
+
+   }
   /*my code ends*/
 }
 
@@ -184,10 +192,27 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  /*my code begins*/
-  thread_foreach (&try_awaking_thread, NULL);
-  /*my code ends*/
   thread_tick ();
+  /*my code begins*/
+  // thread_foreach (&try_awaking_thread, NULL);
+
+   struct list_elem *front;
+   struct thread *entry;
+   while(true){
+     if(list_empty(&sleeping_threads)==true)
+       break;
+
+     front=list_front(&sleeping_threads);
+     entry=list_entry(front,struct thread,elem);
+     if(entry->sleepingtime>ticks)
+       break;
+     else{
+       list_remove(front);
+       thread_unblock(entry);
+     }
+
+   }
+  /*my code ends*/
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

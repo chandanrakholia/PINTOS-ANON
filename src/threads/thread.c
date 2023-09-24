@@ -36,7 +36,9 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
-
+/*my code begins*/
+static struct list sleep_queue;
+/*my code ends*/
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -92,7 +94,9 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-
+  /*my code begins*/
+  list_init(&sleep_queue);
+  /*my code ends*/
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -200,7 +204,11 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
+  /*my code begins*/
+  //if this thread has greater priority, immediately yield running thread
+   if(t->priority > thread_current() -> priority)
+     thread_yield();
+  /*my code ends*/
   return tid;
 }
 
@@ -219,7 +227,17 @@ thread_block (void)
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
 }
+/*my code begins*/
+bool compare_threads_by_priority (const struct list_elem *a,
+                                   const struct list_elem *b,
+                                   void *aux UNUSED)
+   {
+ 	struct thread *a_thread = list_entry (a, struct thread, elem);
+ 	struct thread *b_thread = list_entry (b, struct thread, elem);
 
+ 	return a_thread->priority <= b_thread->priority;
+   }
+/*my code ends*/
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -237,7 +255,11 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem);
+  /*my code begins*/
+  list_insert_ordered (&ready_list, &t->elem, priority_comparator, NULL);
+   //now new threads will be added to ready list according to thier priority instead of simple pushback
+  /*my code ends*/
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -308,7 +330,11 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    /*my code begins*/
+    list_insert_ordered (&ready_list, &cur->elem,priority_comparator,NULL);
+   //removed simple list push_back, now inserted in sorted order according to priority
+    /*my code ends*/
+    // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -336,6 +362,11 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  /*my code begins*/
+  if (!list_empty (&ready_list) && list_entry (list_back (&ready_list),
+       struct thread, elem)->priority > new_priority)
+ 	  thread_yield ();
+  /*my code ends*/
 }
 
 /* Returns the current thread's priority. */
@@ -495,7 +526,10 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    /*my code begins*/
+    return list_entry (list_pop_back (&ready_list), struct thread, elem);
+    /*my code ends*/
+    // return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -580,18 +614,26 @@ allocate_tid (void)
 
   return tid;
 }
-
+/*my code begins*/
+bool sleeptime_comparator(struct list_elem *a, struct list_elem *b, void *aux)
+ {
+   struct thread *thread_one = list_entry (a, struct thread, elem); //find this list element a 
+   struct thread *thread_two = list_entry (b, struct thread, elem); //find this list element b
+   if(thread_one->sleepingtime< thread_two->sleepingtime)
+     return true;
+   else return false;
+ }
+/*my code ends*/
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 /*my code begins*/
-void try_awaking_thread(struct thread *t, void *aux UNUSED)
-   {
-     if (t->status == THREAD_BLOCKED && t->remaining_time_to_wake_up > 0)
- 	  {
-         t->remaining_time_to_wake_up--;
- 		if (t->remaining_time_to_wake_up <= 0)
- 		  thread_unblock(t);
- 	  }
-   }
+bool priority_comparator(struct list_elem *a, struct list_elem *b, void *aux)
+ {
+   struct thread *thread_one = list_entry (a, struct thread, elem);  //find this list element a
+   struct thread *thread_two = list_entry (b, struct thread, elem);  //find this list element b 
+   if(thread_one->priority> thread_two->priority)
+     return true;
+   else return false;
+ }
 /*my code ends*/
