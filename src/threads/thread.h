@@ -141,6 +141,5 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 /*my code begins*/
-static void try_awaking_thread(struct thread *t, void *aux UNUSED);
-/*my code ends*/
+void try_awaking_thread(struct thread *t, void *aux UNUSED);/*my code ends*/
 #endif /* threads/thread.h */
