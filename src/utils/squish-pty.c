@@ -283,14 +283,14 @@ main (int argc __attribute__ ((unused)), char *argv[])
   if (slave < 0)
     fail_io ("open \"%s\"", name);
 
-  /* System V implementations need STREAMS configuration for the
-     slave. */
-  if (isastream (slave))
-    {
-      if (ioctl (slave, I_PUSH, "ptem") < 0
-          || ioctl (slave, I_PUSH, "ldterm") < 0)
-        fail_io ("ioctl");
-    }
+  // /* System V implementations need STREAMS configuration for the
+  //    slave. */
+  // if (isastream (slave))
+  //   {
+  //     if (ioctl (slave, I_PUSH, "ptem") < 0
+  //         || ioctl (slave, I_PUSH, "ldterm") < 0)
+  //       fail_io ("ioctl");
+  //   }
 
   /* Arrange to get notified when a child dies, by writing a byte
      to a pipe fd.  We really want to use pselect() and
